@@ -33,8 +33,6 @@ class RBFNetwork:
         # Сохраняем оригинальные размерности
         if X.ndim == 1:
             X = X.reshape(-1, 1)
-        if y.ndim == 1:
-            y = y.reshape(-1, 1)
 
         # --- НОРМАЛИЗАЦИЯ ПРИЗНАКОВ ---
         X_norm, self.X_mean, self.X_std = standardize(X)

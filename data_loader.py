@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 import os
 
-def load_dataset(path, target_col=-1, delimiter=','):
+def load_dataset(path, delimiter=','):
     """
     Загружает данные из CSV или .npy.
-    Возвращает X (признаки), y (целевая переменная).
+    Возвращает полный DataFrame.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Файл не найден: {path}")
@@ -19,7 +19,8 @@ def load_dataset(path, target_col=-1, delimiter=','):
         try:
             data = np.load(path, allow_pickle=True)
             if isinstance(data, np.ndarray) and data.ndim == 2:
-                df = pd.DataFrame(data)
+                # Для .npy файлов у нас нет названий колонок, генерируем их
+                df = pd.DataFrame(data, columns=[f'col_{i}' for i in range(data.shape[1])])
             else:
                 raise ValueError("Формат .npy должен быть 2D массивом")
         except Exception as e:
@@ -29,14 +30,22 @@ def load_dataset(path, target_col=-1, delimiter=','):
 
     if df.shape[1] < 2:
         raise ValueError("В данных должно быть минимум 2 столбца (признаки + целевая)")
+        
+    return df
 
-    if target_col == -1:
-        X = df.iloc[:, :-1].values
-        y = df.iloc[:, -1].values
-    else:
-        X = df.drop(columns=[df.columns[target_col]]).values
-        y = df.iloc[:, target_col].values
+def split_data(df, target_cols):
+    """
+    Разделяет DataFrame на X (признаки) и y (целевые переменные).
+    target_cols - список названий целевых столбцов.
+    """
+    if not target_cols:
+        raise ValueError("Необходимо выбрать хотя бы один целевой столбец.")
+        
+    y = df[target_cols].values
+    X = df.drop(columns=target_cols).values
 
+    # Убедимся, что типы данных корректны
     X = np.array(X, dtype=float)
-    y = np.array(y).ravel()  # ← УБРАЛИ .reshape(-1, 1) → y теперь 1D!
+    y = np.array(y, dtype=float) # Целевая переменная тоже может быть float
+    
     return X, y
