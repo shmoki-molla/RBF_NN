@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+from sklearn.model_selection import train_test_split
 
 def load_dataset(path, target_col=-1, delimiter=','):
     """
@@ -40,3 +41,14 @@ def load_dataset(path, target_col=-1, delimiter=','):
     X = np.array(X, dtype=float)
     y = np.array(y).ravel()  # ← УБРАЛИ .reshape(-1, 1) → y теперь 1D!
     return X, y
+
+def load_and_split_dataset(path, target_col=-1, delimiter=',', test_size=0.2, random_state=42):
+    """
+    Загружает данные и автоматически разделяет на обучающую и тестовую выборки.
+    Возвращает: X_train, X_test, y_train, y_test
+    """
+    X, y = load_dataset(path, target_col, delimiter)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y
+    )
+    return X_train, X_test, y_train, y_test
