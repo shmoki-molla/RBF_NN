@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 def standardize(X, mean=None, std=None):
     if mean is None or std is None:
@@ -9,7 +10,15 @@ def standardize(X, mean=None, std=None):
     return (X - mean) / std, mean, std
 
 def compute_metrics(y_true, y_pred, task):
-    y_true = np.array(y_true).ravel().astype(int)  # ← 1D, int
+    y_true = np.array(y_true).ravel()
+    
+    # --- БЕЗОПАСНАЯ ОБРАБОТКА y_true ---
+    if y_true.dtype == object or y_true.dtype.kind in 'US':
+        le = LabelEncoder()
+        y_true = le.fit_transform(y_true).astype(int)
+    else:
+        y_true = y_true.astype(int)
+    # ---------------------------------
 
     if task == 'classification':
         if y_pred.ndim == 1:

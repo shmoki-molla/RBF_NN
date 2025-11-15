@@ -41,7 +41,6 @@ def split_data(df, target_cols):
     if not target_cols:
         raise ValueError("Необходимо выбрать хотя бы один целевой столбец.")
         
-    # Проверяем, что все целевые столбцы существуют в DataFrame
     missing_cols = [col for col in target_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Следующие целевые столбцы не найдены: {', '.join(missing_cols)}")
@@ -49,9 +48,13 @@ def split_data(df, target_cols):
     y = df[target_cols].values
     X = df.drop(columns=target_cols).values
 
-    X = np.array(X, dtype=float)
-    y = np.array(y, dtype=float) 
-    
+    X = np.array(X, dtype=float)           # ← X — всегда числа
+    y = np.array(y)                        # ← y — как есть (строки, числа, float)
+
+    # Если y — строки, оставляем как object
+    # Если y — числа, можно оставить как есть
+    # НИКОГДА не принудительно float для классификации!
+
     return X, y
 
 def load_and_split_dataset(path, target_cols, delimiter=',', test_size=0.2, random_state=42):

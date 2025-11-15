@@ -216,10 +216,10 @@ class RBFGUIApp:
             return
 
         task_type = self.task_var.get()
-        if task_type == 'classification':
-            if not np.all(np.equal(np.mod(self.y_train, 1), 0)):
-                messagebox.showerror("Ошибка данных", "Для классификации целевые значения должны быть целыми числами.")
-                return
+        # if task_type == 'classification':
+        #     if not np.all(np.equal(np.mod(self.y_train, 1), 0)):
+        #         messagebox.showerror("Ошибка данных", "Для классификации целевые значения должны быть целыми числами.")
+        #         return
 
         try:
             n_centers = int(self.centers_var.get())
