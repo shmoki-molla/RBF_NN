@@ -1,11 +1,15 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import os
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
+# --- START OF FILE gui_app.py ---
 
-# Убедитесь, что эти файлы находятся в той же директории
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from tkinter.scrolledtext import ScrolledText
+import os
+import pickle
+import numpy as np
+
+# Импорты из локальных файлов
 from data_loader import load_dataset, split_data
 from rbf_network import RBFNetwork
 from utils import compute_metrics
@@ -13,105 +17,170 @@ from utils import compute_metrics
 class RBFGUIApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("RBF Нейросеть")
-        self.root.geometry("700x800")
-
+        self.root.title("RBF Neural Network Studio")
+        self.root.geometry("900x800")
+        
+        # Данные состояния
         self.model = None
         self.train_df, self.test_df = None, None
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
         self.column_names = None
 
-        self.create_widgets()
+        # Основной контейнер с отступами
+        main_frame = ttk.Frame(self.root, padding="20")
+        main_frame.pack(fill=BOTH, expand=YES)
 
-    def create_widgets(self):
-        # --- 1. Загрузка данных (с тремя кнопками) ---
-        frame_data = tk.LabelFrame(self.root, text="1. Загрузка данных", padx=10, pady=10)
-        frame_data.pack(fill="x", padx=10, pady=5)
-
-        # Кнопка 1: Загрузить обучающую выборку
-        tk.Button(frame_data, text="Обучающая выборка", command=self.load_train_file).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        self.train_label = tk.Label(frame_data, text="Не загружено", fg="red")
-        self.train_label.grid(row=0, column=1, sticky="w")
-
-        # Кнопка 2: Загрузить тестовую выборку
-        tk.Button(frame_data, text="Тестовая выборка", command=self.load_test_file).grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        self.test_label = tk.Label(frame_data, text="Не загружено", fg="red")
-        self.test_label.grid(row=1, column=1, sticky="w")
-
-        # Кнопка 3: Загрузить единый датасет для разделения
-        tk.Button(frame_data, text="Единый датасет (для разделения 80/20)", command=self.load_single_file_for_splitting, bg="lightblue").grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        self.single_file_label = tk.Label(frame_data, text="Не загружено", fg="red")
-        self.single_file_label.grid(row=2, column=1, sticky="w")
-
-        # --- 2. Выбор целевой переменной ---
-        self.frame_targets = tk.LabelFrame(self.root, text="2. Выбор целевой(ых) переменной(ых)", padx=10, pady=10)
-        self.frame_targets.pack(fill="x", padx=10, pady=5)
+        # Создание UI
+        self.create_header(main_frame)
+        self.create_data_section(main_frame)
         
-        targets_info_label = tk.Label(self.frame_targets, text="Выберите столбцы из списка (Ctrl/Shift для выбора нескольких).")
-        targets_info_label.pack(anchor="w")
+        # Средняя секция (2 колонки)
+        middle_frame = ttk.Frame(main_frame)
+        middle_frame.pack(fill=X, pady=10)
+        
+        self.create_params_section(middle_frame)  # Левая колонка
+        self.create_target_section(middle_frame)  # Правая колонка
+        
+        self.create_controls_section(main_frame)
+        self.create_results_section(main_frame)
 
-        listbox_frame = tk.Frame(self.frame_targets)
-        listbox_frame.pack(fill="x", expand=True, pady=5)
+    def create_header(self, parent):
+        """Заголовок приложения"""
+        header_frame = ttk.Frame(parent)
+        header_frame.pack(fill=X, pady=(0, 15))
+        
+        title = ttk.Label(header_frame, text="RBF Network Modeling", font=("Helvetica", 20, "bold"), bootstyle=PRIMARY)
+        title.pack(side=LEFT)
+        
+        subtitle = ttk.Label(header_frame, text="Classification • Regression • Clustering", font=("Helvetica", 10))
+        subtitle.pack(side=LEFT, padx=10, pady=(10, 0))
 
-        scrollbar = tk.Scrollbar(listbox_frame)
-        scrollbar.pack(side="right", fill="y")
+    def create_data_section(self, parent):
+        """Секция загрузки файлов (Карточка)"""
+        frame = ttk.Labelframe(parent, text=" 1. Источники данных ", padding=15, bootstyle=INFO)
+        frame.pack(fill=X, pady=5)
 
-        self.target_listbox = tk.Listbox(listbox_frame, selectmode=tk.EXTENDED, exportselection=False, height=5)
-        self.target_listbox.pack(side="left", fill="x", expand=True)
+        # Grid layout inside
+        frame.columnconfigure(1, weight=1)
+
+        # Train Row
+        ttk.Button(frame, text="📂 Train Data", bootstyle="info-outline", command=self.load_train_file, width=15).grid(row=0, column=0, sticky="w", pady=2)
+        self.train_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
+        self.train_label.grid(row=0, column=1, sticky="w", padx=10)
+
+        # Test Row
+        ttk.Button(frame, text="📂 Test Data", bootstyle="info-outline", command=self.load_test_file, width=15).grid(row=1, column=0, sticky="w", pady=2)
+        self.test_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
+        self.test_label.grid(row=1, column=1, sticky="w", padx=10)
+
+        # Single File Row
+        ttk.Button(frame, text="📄 Single File (Split)", bootstyle="secondary-outline", command=self.load_single_file_for_splitting, width=15).grid(row=2, column=0, sticky="w", pady=2)
+        self.single_file_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
+        self.single_file_label.grid(row=2, column=1, sticky="w", padx=10)
+
+    def create_params_section(self, parent):
+        """Левая колонка: Параметры"""
+        frame = ttk.Labelframe(parent, text=" 2. Конфигурация ", padding=15, bootstyle=PRIMARY)
+        frame.pack(side=LEFT, fill=BOTH, expand=YES, padx=(0, 10))
+
+        # Task Type
+        ttk.Label(frame, text="Тип задачи:", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        self.task_var = tk.StringVar(value="classification")
+        self.task_combo = ttk.Combobox(frame, textvariable=self.task_var, values=["classification", "regression", "clustering"], state="readonly", bootstyle=PRIMARY)
+        self.task_combo.pack(fill=X, pady=(5, 10))
+        self.task_combo.bind("<<ComboboxSelected>>", self._on_task_changed)
+
+        # Centers
+        row1 = ttk.Frame(frame)
+        row1.pack(fill=X, pady=5)
+        ttk.Label(row1, text="Число RBF центров:").pack(side=LEFT)
+        self.centers_var = tk.StringVar(value="4")
+        ttk.Entry(row1, textvariable=self.centers_var, width=8).pack(side=RIGHT)
+
+        # Centers Method
+        row2 = ttk.Frame(frame)
+        row2.pack(fill=X, pady=5)
+        ttk.Label(row2, text="Метод центров:").pack(side=LEFT)
+        self.method_var = tk.StringVar(value="kmeans")
+        ttk.Combobox(row2, textvariable=self.method_var, values=["kmeans", "random"], state="readonly", width=12).pack(side=RIGHT)
+
+        # Spread
+        row3 = ttk.Frame(frame)
+        row3.pack(fill=X, pady=5)
+        ttk.Label(row3, text="Ширина (Spread):").pack(side=LEFT)
+        self.spread_var = tk.StringVar(value="auto")
+        ttk.Combobox(row3, textvariable=self.spread_var, values=["auto", "0.5", "1.0", "2.0"], state="readonly", width=12).pack(side=RIGHT)
+
+    def create_target_section(self, parent):
+        """Правая колонка: Выбор целей"""
+        frame = ttk.Labelframe(parent, text=" 3. Целевые переменные ", padding=15, bootstyle=WARNING)
+        frame.pack(side=LEFT, fill=BOTH, expand=YES)
+
+        self.targets_info_label = ttk.Label(frame, text="Выберите столбцы (Y):", bootstyle=SECONDARY)
+        self.targets_info_label.pack(anchor="w", pady=(0, 5))
+
+        # Listbox with Scrollbar
+        list_container = ttk.Frame(frame)
+        list_container.pack(fill=BOTH, expand=YES)
+        
+        scrollbar = ttk.Scrollbar(list_container, bootstyle="round")
+        scrollbar.pack(side=RIGHT, fill=Y)
+        
+        self.target_listbox = tk.Listbox(list_container, selectmode=tk.EXTENDED, height=6, exportselection=False, 
+                                         font=("Consolas", 10), relief="flat", borderwidth=1)
+        self.target_listbox.pack(side=LEFT, fill=BOTH, expand=YES)
         self.target_listbox.config(yscrollcommand=scrollbar.set)
         scrollbar.config(command=self.target_listbox.yview)
 
-        tk.Button(self.frame_targets, text="Подготовить данные к обучению", command=self._prepare_data_from_selection, bg="orange").pack(pady=5)
+        ttk.Button(frame, text="⚡ Подготовить данные", bootstyle="warning", command=self._prepare_data_from_selection).pack(fill=X, pady=(10, 0))
+
+    def create_controls_section(self, parent):
+        """Панель управления"""
+        frame = ttk.Frame(parent)
+        frame.pack(fill=X, pady=10)
+
+        # Большая кнопка обучения
+        self.btn_train = ttk.Button(frame, text="▶ ЗАПУСТИТЬ ОБУЧЕНИЕ", command=self.train_model, bootstyle="success", width=30)
+        self.btn_train.pack(side=LEFT, fill=X, expand=YES, padx=(0, 5))
+
+        # Кнопки сохранения/загрузки
+        ttk.Button(frame, text="💾 Сохранить", command=self.save_model, bootstyle="secondary-outline").pack(side=LEFT, padx=5)
+        ttk.Button(frame, text="📂 Загрузить модель", command=self.load_model, bootstyle="secondary-outline").pack(side=LEFT, padx=5)
+
+    def create_results_section(self, parent):
+        """Вывод логов и тестов"""
+        frame = ttk.Labelframe(parent, text=" Результаты и Тестирование ", padding=15)
+        frame.pack(fill=BOTH, expand=YES, pady=5)
+
+        # Панель кнопок тестов
+        btn_panel = ttk.Frame(frame)
+        btn_panel.pack(fill=X, pady=(0, 10))
         
-        # ... (остальная часть create_widgets остается без изменений) ...
+        ttk.Button(btn_panel, text="📊 Тест на выборке", command=self.test_model, bootstyle="info").pack(side=LEFT, padx=(0, 5))
+        ttk.Button(btn_panel, text="🎲 Предсказать одно значение", command=self.predict_single, bootstyle="info-outline").pack(side=LEFT)
 
-        # --- 3. Параметры модели ---
-        frame_params = tk.LabelFrame(self.root, text="3. Параметры модели", padx=10, pady=10)
-        frame_params.pack(fill="x", padx=10, pady=5)
+        # Консоль вывода
+        self.result_text = ScrolledText(frame, height=10, state="disabled", font=("Consolas", 9))
+        self.result_text.pack(fill=BOTH, expand=YES)
 
-        tk.Label(frame_params, text="Тип задачи:").grid(row=0, column=0, sticky="w")
-        self.task_var = tk.StringVar(value="classification")
-        ttk.Combobox(frame_params, textvariable=self.task_var, values=["classification", "regression"], state="readonly").grid(row=0, column=1, padx=5)
-
-        tk.Label(frame_params, text="Центры:").grid(row=1, column=0, sticky="w")
-        self.centers_var = tk.StringVar(value="4")
-        tk.Entry(frame_params, textvariable=self.centers_var, width=10).grid(row=1, column=1, sticky="w", padx=5)
-
-        tk.Label(frame_params, text="Метод центров:").grid(row=2, column=0, sticky="w")
-        self.method_var = tk.StringVar(value="kmeans")
-        ttk.Combobox(frame_params, textvariable=self.method_var, values=["kmeans", "random"], state="readonly").grid(row=2, column=1, padx=5, sticky="w")
-
-        tk.Label(frame_params, text="Ширина (spread):").grid(row=3, column=0, sticky="w")
-        self.spread_var = tk.StringVar(value="auto")
-        ttk.Combobox(frame_params, textvariable=self.spread_var, values=["auto", "0.5", "1.0", "2.0"], state="readonly").grid(row=3, column=1, padx=5, sticky="w")
-
-        tk.Button(frame_params, text="Обучить модель", command=self.train_model, bg="lightgreen").grid(row=4, column=0, columnspan=2, pady=10)
-
-        # --- 4. Результаты ---
-        frame_results = tk.LabelFrame(self.root, text="4. Результаты", padx=10, pady=10)
-        frame_results.pack(fill="both", expand=True, padx=10, pady=5)
-
-        self.result_text = tk.Text(frame_results, height=10, state="disabled")
-        self.result_text.pack(fill="both", expand=True)
-
-        tk.Button(frame_results, text="Тестировать", command=self.test_model).pack(side="left", padx=5)
-        tk.Button(frame_results, text="Предсказать", command=self.predict_single).pack(side="left", padx=5)
-
+    # --- ЛОГИКА (без изменений, кроме вызовов UI) ---
 
     def _reset_data_state(self):
-        """Сбрасывает все переменные, связанные с данными."""
-        self.train_df, self.test_df = None, None
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
-        self.target_listbox.delete(0, tk.END)
-        self.train_label.config(text="Не загружено", fg="red")
-        self.test_label.config(text="Не загружено", fg="red")
-        self.single_file_label.config(text="Не загружено", fg="red")
         self.model = None
+        self.append_result("--- Сброс данных ---\n")
+
+    def _on_task_changed(self, event):
+        self._reset_data_state()
+        task = self.task_var.get()
+        if task == 'clustering':
+            self.targets_info_label.config(text="Цель не обязательна (Кластеризация)")
+        else:
+            self.targets_info_label.config(text="Выберите столбцы для Y (Target):")
 
     def update_target_listbox(self, df):
-        """Обновляет список колонок для выбора целевой переменной."""
         self.target_listbox.delete(0, tk.END)
         if df is not None:
             self.column_names = df.columns
@@ -119,189 +188,189 @@ class RBFGUIApp:
                 self.target_listbox.insert(tk.END, col_name)
 
     def load_train_file(self):
-        path = filedialog.askopenfilename(filetypes=[("CSV and NumPy files", "*.csv *.npy")])
+        path = filedialog.askopenfilename(filetypes=[("CSV/NPY", "*.csv *.npy")])
         if not path: return
         try:
-            # Сбрасываем предыдущие загрузки
-            self._reset_data_state()
             self.train_df = load_dataset(path)
-            self.train_label.config(text=f"{os.path.basename(path)} ({self.train_df.shape[0]} строк)", fg="green")
-            self.single_file_label.config(text="Используется отдельный файл для обучения", fg="gray")
+            self._reset_data_state()
+            self.train_label.config(text=f"{os.path.basename(path)}", bootstyle="success")
             self.update_target_listbox(self.train_df)
-        except Exception as e:
-            messagebox.showerror("Ошибка загрузки", str(e))
+        except Exception as e: messagebox.showerror("Ошибка", str(e))
 
     def load_test_file(self):
-        if self.train_df is None:
-            messagebox.showwarning("Внимание", "Сначала загрузите обучающую выборку.")
-            return
-        path = filedialog.askopenfilename(filetypes=[("CSV and NumPy files", "*.csv *.npy")])
+        if self.train_df is None: return messagebox.showwarning("", "Сначала загрузите train")
+        path = filedialog.askopenfilename(filetypes=[("CSV/NPY", "*.csv *.npy")])
         if not path: return
         try:
             self.test_df = load_dataset(path)
-            # Проверка на совпадение колонок
-            if set(self.train_df.columns) != set(self.test_df.columns):
-                self.test_df = None
-                raise ValueError("Колонки в обучающем и тестовом файлах не совпадают!")
-            self.test_label.config(text=f"{os.path.basename(path)} ({self.test_df.shape[0]} строк)", fg="green")
-        except Exception as e:
-            messagebox.showerror("Ошибка загрузки", str(e))
+            if set(self.train_df.columns) != set(self.test_df.columns): 
+                 raise ValueError("Колонки не совпадают")
+            self.test_label.config(text=f"{os.path.basename(path)}", bootstyle="success")
+        except Exception as e: messagebox.showerror("Ошибка", str(e))
 
     def load_single_file_for_splitting(self):
-        path = filedialog.askopenfilename(filetypes=[("CSV and NumPy files", "*.csv *.npy")])
+        path = filedialog.askopenfilename(filetypes=[("CSV/NPY", "*.csv *.npy")])
         if not path: return
         try:
-            # Сбрасываем всё, так как это новый сценарий
+            self.train_df = load_dataset(path)
+            self.test_df = None
             self._reset_data_state()
-            self.train_df = load_dataset(path) # Загружаем всё в train_df
-            self.test_df = None # Явно указываем, что тестового файла нет
-            
-            filename = os.path.basename(path)
-            self.single_file_label.config(text=f"{filename} ({self.train_df.shape[0]} строк)", fg="green")
-            self.train_label.config(text="Будет создана из единого файла", fg="blue")
-            self.test_label.config(text="Будет создана из единого файла", fg="blue")
+            self.single_file_label.config(text=f"{os.path.basename(path)}", bootstyle="success")
+            self.train_label.config(text="Общий файл", bootstyle="secondary")
+            self.test_label.config(text="Авто-сплит", bootstyle="secondary")
             self.update_target_listbox(self.train_df)
-        except Exception as e:
-            messagebox.showerror("Ошибка загрузки", str(e))
+        except Exception as e: messagebox.showerror("Ошибка", str(e))
 
     def _prepare_data_from_selection(self):
-        """Главная функция подготовки данных после выбора целевых столбцов."""
+        task = self.task_var.get()
         selected_indices = self.target_listbox.curselection()
-        if not selected_indices:
-            messagebox.showerror("Ошибка", "Выберите хотя бы один целевой столбец!")
-            return
-        if self.train_df is None:
-            messagebox.showerror("Ошибка", "Сначала загрузите данные!")
-            return
-
         selected_targets = [self.target_listbox.get(i) for i in selected_indices]
+
+        if not selected_targets and task != 'clustering':
+            messagebox.showerror("Внимание", "Выберите целевую переменную для обучения с учителем!")
+            return
         
+        if self.train_df is None:
+            messagebox.showerror("Ошибка", "Данные не загружены")
+            return
+
         try:
-            # Сценарий 1: Загружен один файл, который нужно разделить
+            def get_X_y_safe(df, targets):
+                return split_data(df, targets)
+
             if self.test_df is None:
-                X, y = split_data(self.train_df, selected_targets)
-                
-                try: # Пытаемся разделить стратифицированно
-                    self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-                        X, y, test_size=0.2, random_state=42, stratify=y
-                    )
-                except ValueError: # Если не вышло (например, регрессия), делим обычно
-                    self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-                        X, y, test_size=0.2, random_state=42
-                    )
-
-                self.append_result(f"Единый датасет разделен на:\n")
-                self.append_result(f"  Обучение: {self.X_train.shape[0]} примеров\n")
-                self.append_result(f"  Тест:      {self.X_test.shape[0]} примеров\n")
-
-            # Сценарий 2: Загружены оба файла (train и test)
+                X, y = get_X_y_safe(self.train_df, selected_targets)
+                if y is None:
+                     self.X_train, self.X_test = split_data(self.train_df, [])[0], None # Simplified logic for clustering split
+                     # For simplicity in clustering without target, we just use full data or random split
+                     from sklearn.model_selection import train_test_split
+                     self.X_train, self.X_test = train_test_split(X, test_size=0.2, random_state=42)
+                     self.y_train, self.y_test = None, None
+                else:
+                    try:
+                        from sklearn.model_selection import train_test_split
+                        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+                            X, y, test_size=0.2, random_state=42, stratify=y
+                        )
+                    except ValueError:
+                         from sklearn.model_selection import train_test_split
+                         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+                            X, y, test_size=0.2, random_state=42
+                        )
             else:
-                self.X_train, self.y_train = split_data(self.train_df, selected_targets)
-                self.X_test, self.y_test = split_data(self.test_df, selected_targets)
-                self.append_result(f"Данные из файлов подготовлены:\n")
-                self.append_result(f"  Обучение: {self.X_train.shape[0]} примеров\n")
-                self.append_result(f"  Тест:      {self.X_test.shape[0]} примеров\n")
-            
-            messagebox.showinfo("Успех", "Данные успешно подготовлены к обучению!")
+                self.X_train, self.y_train = get_X_y_safe(self.train_df, selected_targets)
+                self.X_test, self.y_test = get_X_y_safe(self.test_df, selected_targets)
+
+            dims = self.X_train.shape[1] if self.X_train is not None else 0
+            self.append_result(f"✔ Данные готовы: Train={self.X_train.shape[0]}, Test={self.X_test.shape[0]}, Features={dims}\n")
+            messagebox.showinfo("Готово", "Данные успешно подготовлены.")
 
         except Exception as e:
-            messagebox.showerror("Ошибка подготовки данных", str(e))
+            messagebox.showerror("Ошибка подготовки", str(e))
 
-    # Методы train_model, test_model, predict_single и append_result остаются без изменений.
-    # Их код можно скопировать из предыдущего ответа.
-    
     def train_model(self):
-        if self.X_train is None or self.y_train is None:
-            messagebox.showwarning("Ошибка", "Данные не подготовлены. Загрузите данные, выберите целевые столбцы и нажмите 'Подготовить данные'.")
+        if self.X_train is None:
+            messagebox.showwarning("Внимание", "Сначала нажмите 'Подготовить данные'")
             return
-
-        task_type = self.task_var.get()
-        # if task_type == 'classification':
-        #     if not np.all(np.equal(np.mod(self.y_train, 1), 0)):
-        #         messagebox.showerror("Ошибка данных", "Для классификации целевые значения должны быть целыми числами.")
-        #         return
+        
+        task = self.task_var.get()
+        if task != 'clustering' and self.y_train is None:
+             messagebox.showerror("Ошибка", "Нет целевой переменной.")
+             return
 
         try:
             n_centers = int(self.centers_var.get())
-            if n_centers < 1 or n_centers > self.X_train.shape[0]:
-                raise ValueError(f"Число центров должно быть от 1 до {self.X_train.shape[0]}")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Неверное число центров: {e}")
-            return
+            spread_str = self.spread_var.get()
+            spread = 'auto' if spread_str == 'auto' else float(spread_str)
 
-        spread_str = self.spread_var.get()
-        spread = 'auto' if spread_str == 'auto' else float(spread_str)
-
-        self.append_result("Обучение...\n")
-        self.model = RBFNetwork(n_centers=n_centers, spread=spread)
-        try:
-            self.model.fit(self.X_train, self.y_train, task=self.task_var.get(), center_method=self.method_var.get())
-            self.append_result("Обучение завершено!\n")
+            self.append_result(f"⏳ Обучение модели ({task}, centers={n_centers})...\n")
+            self.root.update() # Обновить UI
+            
+            self.model = RBFNetwork(n_centers=n_centers, spread=spread)
+            self.model.fit(self.X_train, self.y_train, task=task, center_method=self.method_var.get())
+            
+            self.append_result("✔ Обучение завершено успешно!\n")
         except Exception as e:
-            self.append_result(f"Ошибка при обучении: {e}\n")
-            messagebox.showerror("Ошибка обучения", str(e))
+            self.append_result(f"❌ ОШИБКА: {e}\n")
+            messagebox.showerror("Error", str(e))
 
     def test_model(self):
-        if not self.model:
-            messagebox.showwarning("Ошибка", "Сначала обучите модель.")
-            return
-        if self.X_test is None or self.y_test is None:
-            messagebox.showwarning("Ошибка", "Тестовая выборка не подготовлена.")
-            return
-            
-        self.append_result("Тестирование...\n")
+        if not self.model: return messagebox.showwarning("", "Модель не обучена")
+        if self.X_test is None: return messagebox.showwarning("", "Нет тестовых данных")
+        
+        self.append_result("🔎 Тестирование...\n")
         try:
             y_pred = self.model.predict(self.X_test)
-            metrics = compute_metrics(self.y_test, y_pred, self.model.task)
-            self.append_result("Результаты на тестовой выборке:\n")
+            metrics = compute_metrics(self.y_test, y_pred, self.model.task, X=self.X_test)
+            
+            self.append_result("-" * 30 + "\n")
             for k, v in metrics.items():
                 self.append_result(f"  {k}: {v:.4f}\n")
+            self.append_result("-" * 30 + "\n")
+                
+            if self.model.task == 'clustering':
+                counts = np.bincount(y_pred.astype(int))
+                self.append_result(f"  Размеры кластеров: {counts}\n")
+                
         except Exception as e:
-            self.append_result(f"Ошибка при тестировании: {e}\n")
-            messagebox.showerror("Ошибка тестирования", str(e))
+            self.append_result(f"Ошибка теста: {e}\n")
 
     def predict_single(self):
-        if not self.model:
-            messagebox.showwarning("Ошибка", "Обучите модель")
-            return
+        if not self.model: return messagebox.showwarning("", "Нет модели")
+        if self.model.X_mean is None: return messagebox.showwarning("", "Модель пуста")
 
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Предсказание для одного примера")
-        dialog.geometry("400x150")
+        n_features = self.model.X_mean.shape[0]
         
-        num_features = self.model.X_mean.shape[0]
-
-        tk.Label(dialog, text=f"Введите {num_features} признаков через пробел:").pack(pady=10)
-        entry = tk.Entry(dialog, width=50)
-        entry.pack(pady=10)
-
-        def run_prediction():
+        d = ttk.Toplevel(self.root)
+        d.title("Ручной ввод")
+        d.geometry("400x200")
+        
+        ttk.Label(d, text=f"Введите {n_features} чисел (через пробел):", bootstyle=INFO).pack(pady=10)
+        entry = ttk.Entry(d, width=40)
+        entry.pack(pady=5)
+        
+        def run():
             try:
-                values_str = entry.get().strip().split()
-                if len(values_str) != num_features:
-                    raise ValueError(f"Ожидалось {num_features} признаков, а введено {len(values_str)}")
+                raw = entry.get().replace(',', ' ')
+                vals = np.array([float(x) for x in raw.split()])
+                if vals.size != n_features: raise ValueError(f"Нужно {n_features} чисел")
                 
-                values = np.array([float(v) for v in values_str]).reshape(1, -1)
-                pred = self.model.predict(values)
-
+                vals = vals.reshape(1, -1)
+                res = self.model.predict(vals)
+                
                 if self.model.task == 'classification':
-                    pred_probs = pred[0]
-                    cls = np.argmax(pred_probs)
-                    probs_str = ", ".join([f"{p:.3f}" for p in pred_probs])
-                    result = f"Предсказанный класс: {cls}\nВероятности: [{probs_str}]"
-                else: # regression
-                    pred_values = pred.flatten()
-                    result_str = ", ".join([f"{val:.4f}" for val in pred_values])
-                    result = f"Предсказанные значения: [{result_str}]"
+                    cls = np.argmax(res[0])
+                    probs = np.round(res[0], 3)
+                    msg = f"Класс: {cls}\nВероятности: {probs}"
+                elif self.model.task == 'clustering':
+                    msg = f"Кластер: {res[0]}"
+                else:
+                    msg = f"Значение: {res[0]:.4f}"
                 
-                messagebox.showinfo("Результат предсказания", result)
-                dialog.destroy()
-
+                messagebox.showinfo("Результат", msg)
             except Exception as e:
-                messagebox.showerror("Ошибка ввода", str(e), parent=dialog)
+                messagebox.showerror("Ошибка", str(e))
+            
+        ttk.Button(d, text="Рассчитать", command=run, bootstyle="success").pack(pady=10)
 
-        tk.Button(dialog, text="Предсказать", command=run_prediction).pack(pady=10)
+    def save_model(self):
+        if not self.model: return
+        f = filedialog.asksaveasfilename(defaultextension=".pkl", filetypes=[("Pickle", "*.pkl")])
+        if f:
+            with open(f, 'wb') as file: pickle.dump(self.model, file)
+            self.append_result(f"💾 Сохранено в {os.path.basename(f)}\n")
 
+    def load_model(self):
+        f = filedialog.askopenfilename(filetypes=[("Pickle", "*.pkl")])
+        if f:
+            try:
+                with open(f, 'rb') as file: self.model = pickle.load(file)
+                self.task_var.set(self.model.task)
+                self.centers_var.set(self.model.n_centers)
+                if hasattr(self.model, 'spread'): self.spread_var.set(self.model.spread)
+                self.append_result(f"📂 Загружена модель: {self.model.task}\n")
+                self._on_task_changed(None)
+            except Exception as e: messagebox.showerror("Ошибка", str(e))
 
     def append_result(self, text):
         self.result_text.config(state="normal")
