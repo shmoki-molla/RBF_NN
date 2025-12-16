@@ -11,15 +11,11 @@ def standardize(X, mean=None, std=None):
 
 def compute_metrics(y_true, y_pred, task, X=None):
     """
-    Вычисляет метрики. 
-    Для кластеризации y_true может быть None, если нет истинных меток.
-    Для кластеризации нужен X для расчета силуэта.
+    Вычисляет метрики в зависимости от задачи.
     """
-    
     # --- КЛАСТЕРИЗАЦИЯ ---
     if task == 'clustering':
         metrics = {}
-        # Внутренняя метрика (без учителя)
         if X is not None and len(np.unique(y_pred)) > 1:
             try:
                 sil = silhouette_score(X, y_pred)
@@ -27,9 +23,8 @@ def compute_metrics(y_true, y_pred, task, X=None):
             except Exception:
                 metrics['Silhouette'] = -1.0
         
-        # Внешняя метрика (если есть истинные метки)
         if y_true is not None:
-             # Обработка меток, если они строки
+            # Обработка меток
             if y_true.dtype == object or y_true.dtype.kind in 'US':
                 le = LabelEncoder()
                 y_true = le.fit_transform(y_true.ravel())
@@ -38,11 +33,9 @@ def compute_metrics(y_true, y_pred, task, X=None):
                 
             ari = adjusted_rand_score(y_true, y_pred)
             metrics['ARI (Ground Truth match)'] = ari
-            
         return metrics
 
     # --- ОСТАЛЬНЫЕ ЗАДАЧИ ---
-    # Приведение типов только если есть y_true
     y_true = np.array(y_true).ravel()
     
     if task == 'classification':
@@ -60,7 +53,6 @@ def compute_metrics(y_true, y_pred, task, X=None):
         return {'accuracy': acc, 'f1_macro': f1}
 
     elif task == 'regression':
-        # Не делаем astype(int) для регрессии!
         y_pred = y_pred.ravel()
         mse = mean_squared_error(y_true, y_pred)
         return {'MSE': mse, 'RMSE': np.sqrt(mse)}

@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import os
-from sklearn.model_selection import train_test_split
 
 def load_dataset(path, delimiter=','):
     """
@@ -13,7 +12,6 @@ def load_dataset(path, delimiter=','):
 
     if path.endswith('.csv'):
         try:
-            # Читаем CSV. skipinitialspace помогает убрать пробелы после запятых
             df = pd.read_csv(path, delimiter=delimiter, skipinitialspace=True)
         except Exception as e:
             raise ValueError(f"Ошибка чтения CSV: {e}")
@@ -37,7 +35,7 @@ def load_dataset(path, delimiter=','):
 def split_data(df, target_cols):
     """
     Разделяет DataFrame на X (признаки) и y (целевые переменные).
-    Автоматически удаляет нечисловые колонки из X, чтобы избежать ошибок.
+    Автоматически удаляет нечисловые колонки из X.
     """
     if target_cols:
         missing_cols = [col for col in target_cols if col not in df.columns]
@@ -45,15 +43,12 @@ def split_data(df, target_cols):
             raise ValueError(f"Целевые столбцы не найдены: {', '.join(missing_cols)}")
         
         y = df[target_cols].values
-        # Удаляем целевые колонки из признаков
         X_df = df.drop(columns=target_cols)
     else:
-        # Если цель не указана (кластеризация без учителя), то всё - признаки
         y = None
         X_df = df
 
-    # --- ИСПРАВЛЕНИЕ: Оставляем только числовые колонки для X ---
-    # Это предотвращает краш "could not convert string to float"
+    # Оставляем только числовые колонки для X
     X_numeric = X_df.select_dtypes(include=[np.number])
     
     if X_numeric.shape[1] < X_df.shape[1]:
@@ -64,6 +59,6 @@ def split_data(df, target_cols):
         raise ValueError("В признаках (X) не осталось числовых данных!")
 
     X = X_numeric.values
-    X = np.nan_to_num(X) # Заменяем NaN на 0, чтобы не было ошибок вычислений
+    X = np.nan_to_num(X) # Замена NaN на 0
 
     return X, y

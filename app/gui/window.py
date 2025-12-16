@@ -1,24 +1,21 @@
-# --- START OF FILE gui_app.py ---
-
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from tkinter.scrolledtext import ScrolledText
 import os
 import pickle
 import numpy as np
 
-# Импорты из локальных файлов
-from data_loader import load_dataset, split_data
-from rbf_network import RBFNetwork
-from utils import compute_metrics
+# Импорты из внутренней структуры приложения
+from app.utils.data_loader import load_dataset, split_data
+from app.core.rbf_network import RBFNetwork
+from app.utils.metrics import compute_metrics
+from app.config import DEFAULT_CENTERS, DEFAULT_METHOD, DEFAULT_SPREAD
 
 class RBFGUIApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("RBF Neural Network Studio")
-        self.root.geometry("900x800")
         
         # Данные состояния
         self.model = None
@@ -27,7 +24,7 @@ class RBFGUIApp:
         self.X_test, self.y_test = None, None
         self.column_names = None
 
-        # Основной контейнер с отступами
+        # Основной контейнер
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(fill=BOTH, expand=YES)
 
@@ -35,18 +32,16 @@ class RBFGUIApp:
         self.create_header(main_frame)
         self.create_data_section(main_frame)
         
-        # Средняя секция (2 колонки)
         middle_frame = ttk.Frame(main_frame)
         middle_frame.pack(fill=X, pady=10)
         
-        self.create_params_section(middle_frame)  # Левая колонка
-        self.create_target_section(middle_frame)  # Правая колонка
+        self.create_params_section(middle_frame)
+        self.create_target_section(middle_frame)
         
         self.create_controls_section(main_frame)
         self.create_results_section(main_frame)
 
     def create_header(self, parent):
-        """Заголовок приложения"""
         header_frame = ttk.Frame(parent)
         header_frame.pack(fill=X, pady=(0, 15))
         
@@ -57,70 +52,57 @@ class RBFGUIApp:
         subtitle.pack(side=LEFT, padx=10, pady=(10, 0))
 
     def create_data_section(self, parent):
-        """Секция загрузки файлов (Карточка)"""
         frame = ttk.Labelframe(parent, text=" 1. Источники данных ", padding=15, bootstyle=INFO)
         frame.pack(fill=X, pady=5)
-
-        # Grid layout inside
         frame.columnconfigure(1, weight=1)
 
-        # Train Row
-        ttk.Button(frame, text="📂 Train Data", bootstyle="info-outline", command=self.load_train_file, width=15).grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Button(frame, text="📂 Train Data", bootstyle="info-outline", command=self.load_train_file, width=20).grid(row=0, column=0, sticky="w", pady=2)
         self.train_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
         self.train_label.grid(row=0, column=1, sticky="w", padx=10)
 
-        # Test Row
-        ttk.Button(frame, text="📂 Test Data", bootstyle="info-outline", command=self.load_test_file, width=15).grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Button(frame, text="📂 Test Data", bootstyle="info-outline", command=self.load_test_file, width=20).grid(row=1, column=0, sticky="w", pady=2)
         self.test_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
         self.test_label.grid(row=1, column=1, sticky="w", padx=10)
 
-        # Single File Row
-        ttk.Button(frame, text="📄 Single File (Split)", bootstyle="secondary-outline", command=self.load_single_file_for_splitting, width=15).grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Button(frame, text="📄 Single File (Split)", bootstyle="secondary-outline", command=self.load_single_file_for_splitting, width=20).grid(row=2, column=0, sticky="w", pady=2)
         self.single_file_label = ttk.Label(frame, text="Файл не выбран", bootstyle=SECONDARY)
         self.single_file_label.grid(row=2, column=1, sticky="w", padx=10)
 
     def create_params_section(self, parent):
-        """Левая колонка: Параметры"""
         frame = ttk.Labelframe(parent, text=" 2. Конфигурация ", padding=15, bootstyle=PRIMARY)
         frame.pack(side=LEFT, fill=BOTH, expand=YES, padx=(0, 10))
 
-        # Task Type
         ttk.Label(frame, text="Тип задачи:", font=("Segoe UI", 9, "bold")).pack(anchor="w")
         self.task_var = tk.StringVar(value="classification")
         self.task_combo = ttk.Combobox(frame, textvariable=self.task_var, values=["classification", "regression", "clustering"], state="readonly", bootstyle=PRIMARY)
         self.task_combo.pack(fill=X, pady=(5, 10))
         self.task_combo.bind("<<ComboboxSelected>>", self._on_task_changed)
 
-        # Centers
         row1 = ttk.Frame(frame)
         row1.pack(fill=X, pady=5)
         ttk.Label(row1, text="Число RBF центров:").pack(side=LEFT)
-        self.centers_var = tk.StringVar(value="4")
+        self.centers_var = tk.StringVar(value=str(DEFAULT_CENTERS))
         ttk.Entry(row1, textvariable=self.centers_var, width=8).pack(side=RIGHT)
 
-        # Centers Method
         row2 = ttk.Frame(frame)
         row2.pack(fill=X, pady=5)
         ttk.Label(row2, text="Метод центров:").pack(side=LEFT)
-        self.method_var = tk.StringVar(value="kmeans")
+        self.method_var = tk.StringVar(value=DEFAULT_METHOD)
         ttk.Combobox(row2, textvariable=self.method_var, values=["kmeans", "random"], state="readonly", width=12).pack(side=RIGHT)
 
-        # Spread
         row3 = ttk.Frame(frame)
         row3.pack(fill=X, pady=5)
         ttk.Label(row3, text="Ширина (Spread):").pack(side=LEFT)
-        self.spread_var = tk.StringVar(value="auto")
+        self.spread_var = tk.StringVar(value=DEFAULT_SPREAD)
         ttk.Combobox(row3, textvariable=self.spread_var, values=["auto", "0.5", "1.0", "2.0"], state="readonly", width=12).pack(side=RIGHT)
 
     def create_target_section(self, parent):
-        """Правая колонка: Выбор целей"""
         frame = ttk.Labelframe(parent, text=" 3. Целевые переменные ", padding=15, bootstyle=WARNING)
         frame.pack(side=LEFT, fill=BOTH, expand=YES)
 
         self.targets_info_label = ttk.Label(frame, text="Выберите столбцы (Y):", bootstyle=SECONDARY)
         self.targets_info_label.pack(anchor="w", pady=(0, 5))
 
-        # Listbox with Scrollbar
         list_container = ttk.Frame(frame)
         list_container.pack(fill=BOTH, expand=YES)
         
@@ -136,35 +118,29 @@ class RBFGUIApp:
         ttk.Button(frame, text="⚡ Подготовить данные", bootstyle="warning", command=self._prepare_data_from_selection).pack(fill=X, pady=(10, 0))
 
     def create_controls_section(self, parent):
-        """Панель управления"""
         frame = ttk.Frame(parent)
         frame.pack(fill=X, pady=10)
 
-        # Большая кнопка обучения
         self.btn_train = ttk.Button(frame, text="▶ ЗАПУСТИТЬ ОБУЧЕНИЕ", command=self.train_model, bootstyle="success", width=30)
         self.btn_train.pack(side=LEFT, fill=X, expand=YES, padx=(0, 5))
 
-        # Кнопки сохранения/загрузки
         ttk.Button(frame, text="💾 Сохранить", command=self.save_model, bootstyle="secondary-outline").pack(side=LEFT, padx=5)
         ttk.Button(frame, text="📂 Загрузить модель", command=self.load_model, bootstyle="secondary-outline").pack(side=LEFT, padx=5)
 
     def create_results_section(self, parent):
-        """Вывод логов и тестов"""
         frame = ttk.Labelframe(parent, text=" Результаты и Тестирование ", padding=15)
         frame.pack(fill=BOTH, expand=YES, pady=5)
 
-        # Панель кнопок тестов
         btn_panel = ttk.Frame(frame)
         btn_panel.pack(fill=X, pady=(0, 10))
         
         ttk.Button(btn_panel, text="📊 Тест на выборке", command=self.test_model, bootstyle="info").pack(side=LEFT, padx=(0, 5))
         ttk.Button(btn_panel, text="🎲 Предсказать одно значение", command=self.predict_single, bootstyle="info-outline").pack(side=LEFT)
 
-        # Консоль вывода
         self.result_text = ScrolledText(frame, height=10, state="disabled", font=("Consolas", 9))
         self.result_text.pack(fill=BOTH, expand=YES)
 
-    # --- ЛОГИКА (без изменений, кроме вызовов UI) ---
+    # --- ЛОГИКА ---
 
     def _reset_data_state(self):
         self.X_train, self.y_train = None, None
@@ -240,20 +216,17 @@ class RBFGUIApp:
 
             if self.test_df is None:
                 X, y = get_X_y_safe(self.train_df, selected_targets)
-                if y is None:
-                     self.X_train, self.X_test = split_data(self.train_df, [])[0], None # Simplified logic for clustering split
-                     # For simplicity in clustering without target, we just use full data or random split
+                if y is None: # Clustering or no target
                      from sklearn.model_selection import train_test_split
                      self.X_train, self.X_test = train_test_split(X, test_size=0.2, random_state=42)
                      self.y_train, self.y_test = None, None
                 else:
+                    from sklearn.model_selection import train_test_split
                     try:
-                        from sklearn.model_selection import train_test_split
                         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
                             X, y, test_size=0.2, random_state=42, stratify=y
                         )
                     except ValueError:
-                         from sklearn.model_selection import train_test_split
                          self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
                             X, y, test_size=0.2, random_state=42
                         )
@@ -284,7 +257,7 @@ class RBFGUIApp:
             spread = 'auto' if spread_str == 'auto' else float(spread_str)
 
             self.append_result(f"⏳ Обучение модели ({task}, centers={n_centers})...\n")
-            self.root.update() # Обновить UI
+            self.root.update()
             
             self.model = RBFNetwork(n_centers=n_centers, spread=spread)
             self.model.fit(self.X_train, self.y_train, task=task, center_method=self.method_var.get())
